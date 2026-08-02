@@ -501,7 +501,7 @@ class VoiceSessionOrchestrator:
         await self._state("thinking", turn_id=turn_id)
         messages = truncate_conversation(
             self.history,
-            max_tokens=self.settings.tenstorrent_max_context_tokens,
+            max_tokens=self.settings.llm_max_context_tokens,
             reserve_response_tokens=512,
         )
         tts_queue: asyncio.Queue[SpeechSegment | None] = asyncio.Queue(self.settings.tts_queue_size)

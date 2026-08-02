@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     mock_auth: bool = True
 
     voice_provider: Literal["mock", "inworld"] = "mock"
-    llm_provider: Literal["mock", "tenstorrent"] = "mock"
+    llm_provider: Literal["mock", "tenstorrent", "inworld"] = "mock"
     speculative_generation: bool = False
 
     inworld_api_key: str | None = None
@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     inworld_language: str = "en-US"
     inworld_tts_delivery_mode: Literal["STABLE", "BALANCED", "CREATIVE"] = "BALANCED"
     inworld_tts_sample_rate_hz: int = Field(default=24_000, ge=8_000, le=48_000)
+    inworld_llm_base_url: str = "https://api.inworld.ai/v1"
+    inworld_llm_model: str | None = "auto"
+    inworld_llm_max_context_tokens: int = 8192
+    inworld_llm_connect_timeout_seconds: float = 10.0
+    inworld_llm_request_timeout_seconds: float = 30.0
+    inworld_llm_total_timeout_seconds: float = 60.0
 
     tenstorrent_base_url: str = "http://localhost:8000/v1"
     tenstorrent_api_key: str | None = None
@@ -128,12 +134,23 @@ class Settings(BaseSettings):
                 )
             if self.tenstorrent_base_url.startswith("http://") and self.app_environment == "production":
                 issues.append("Production Tenstorrent access requires TLS or a private authenticated proxy.")
+        if self.llm_provider == "inworld":
+            if not self.inworld_api_key:
+                issues.append("Inworld reply generation requires INWORLD_API_KEY.")
+            if not self.inworld_llm_model:
+                issues.append("Inworld reply generation requires INWORLD_LLM_MODEL.")
         if self.app_environment == "production" and self.mock_auth:
             issues.append(
                 "Production readiness requires an implemented authentication and family-authorization boundary; "
                 "mock authentication is demo-only."
             )
         return issues
+
+    @property
+    def llm_max_context_tokens(self) -> int:
+        if self.llm_provider == "inworld":
+            return self.inworld_llm_max_context_tokens
+        return self.tenstorrent_max_context_tokens
 
 
 @lru_cache(maxsize=1)

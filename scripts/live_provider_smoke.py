@@ -8,6 +8,7 @@ from typing import Literal
 
 from linger_api.config import get_settings
 from linger_api.providers.inworld import STT_AUDIO_FORMAT, InworldSTTProvider, InworldTTSProvider
+from linger_api.providers.inworld_llm import InworldLLMProvider
 from linger_api.providers.tenstorrent import TenstorrentLLMProvider
 
 Status = Literal["pass", "fail", "skipped", "unavailable"]
@@ -56,6 +57,34 @@ async def check_inworld_tts() -> Check:
         return Check("inworld_tts", "pass", f"Synthesized {total_bytes} bytes of raw PCM audio.")
     except Exception as exc:
         return Check("inworld_tts", "fail", f"Synthesis check failed ({type(exc).__name__}).")
+    finally:
+        await provider.close()
+
+
+async def check_inworld_llm() -> Check:
+    settings = get_settings()
+    if not settings.inworld_api_key:
+        return Check("inworld_llm", "skipped", "INWORLD_API_KEY is not configured.")
+    if not settings.inworld_llm_model:
+        return Check("inworld_llm", "unavailable", "INWORLD_LLM_MODEL is not configured.")
+    provider = InworldLLMProvider(settings)
+    cancellation = asyncio.Event()
+    generated = ""
+    try:
+        async for chunk in provider.stream(
+            [
+                {"role": "system", "content": "Reply briefly."},
+                {"role": "user", "content": "Reply with exactly: Inworld reply ready"},
+            ],
+            turn_id=0,
+            cancellation=cancellation,
+        ):
+            generated += chunk.text
+        if generated.strip() != "Inworld reply ready":
+            return Check("inworld_llm", "fail", "Chat completion returned unexpected text.")
+        return Check("inworld_llm", "pass", "Streamed a verified Inworld-generated reply.")
+    except Exception as exc:
+        return Check("inworld_llm", "fail", f"Reply generation failed ({type(exc).__name__}).")
     finally:
         await provider.close()
 
@@ -114,7 +143,12 @@ async def check_tenstorrent() -> list[Check]:
 
 
 async def main() -> int:
-    checks = [await check_inworld_stt(), await check_inworld_tts(), *(await check_tenstorrent())]
+    checks = [
+        await check_inworld_stt(),
+        await check_inworld_llm(),
+        await check_inworld_tts(),
+        *(await check_tenstorrent()),
+    ]
     print(json.dumps({"checks": [asdict(check) for check in checks]}, indent=2))
     return 1 if any(check.status == "fail" for check in checks) else 0
 

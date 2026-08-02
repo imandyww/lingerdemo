@@ -174,11 +174,13 @@ To exercise the server-side Inworld STT/TTS adapters, read [provider notes](docs
 
 ```env
 VOICE_PROVIDER=inworld
+LLM_PROVIDER=inworld
 NEXT_PUBLIC_VOICE_PROVIDER=backend
 INWORLD_API_KEY=your-server-side-credential
 INWORLD_STT_MODEL=your-verified-stt-model
 INWORLD_TTS_MODEL=inworld-tts-2
 INWORLD_VOICE_ID=your-verified-voice
+INWORLD_LLM_MODEL=auto
 ```
 
 Never place provider credentials in a `NEXT_PUBLIC_*` variable.

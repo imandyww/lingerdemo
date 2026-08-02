@@ -10,8 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api import router as api_router
 from .config import get_settings
 from .database import SessionLocal, engine, init_database
-from .providers.base import ProviderHealth
+from .providers.base import ProviderHealth, StreamingLLMProvider, StreamingSTTProvider, StreamingTTSProvider
 from .providers.inworld import InworldSTTProvider, InworldTTSProvider
+from .providers.inworld_llm import InworldLLMProvider
 from .providers.mock import MockLLMProvider, MockSTTProvider, MockTTSProvider
 from .providers.tenstorrent import TenstorrentLLMProvider
 from .security import websocket_origin_allowed, websocket_transport_allowed
@@ -74,10 +75,15 @@ async def health() -> dict[str, object]:
     }
 
 
-def _providers() -> tuple[object, object, object]:
+def _providers() -> tuple[StreamingSTTProvider, StreamingLLMProvider, StreamingTTSProvider]:
     stt = InworldSTTProvider(settings) if settings.voice_provider == "inworld" else MockSTTProvider()
     tts = InworldTTSProvider(settings) if settings.voice_provider == "inworld" else MockTTSProvider()
-    llm = TenstorrentLLMProvider(settings) if settings.llm_provider == "tenstorrent" else MockLLMProvider()
+    if settings.llm_provider == "tenstorrent":
+        llm: StreamingLLMProvider = TenstorrentLLMProvider(settings)
+    elif settings.llm_provider == "inworld":
+        llm = InworldLLMProvider(settings)
+    else:
+        llm = MockLLMProvider()
     return stt, llm, tts
 
 
