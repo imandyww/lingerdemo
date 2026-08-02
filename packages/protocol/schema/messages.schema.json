@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linger.local/protocol/messages.schema.json",
+  "title": "Linger WebSocket control message",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "protocol_version", "session_id", "turn_id", "sequence", "timestamp", "correlation_id", "payload"],
+  "properties": {
+    "type": {
+      "enum": [
+        "session.start",
+        "audio.append",
+        "audio.commit",
+        "assistant.cancel",
+        "assistant.playback.ack",
+        "session.stop",
+        "ping"
+      ]
+    },
+    "protocol_version": { "const": "1.0" },
+    "session_id": { "type": "string", "format": "uuid", "minLength": 36, "maxLength": 36 },
+    "turn_id": { "type": "integer", "minimum": 0 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "correlation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "session.start" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["language", "consent_to_record", "retain_audio", "client_mode"],
+            "properties": {
+              "language": { "type": "string", "minLength": 2, "maxLength": 35 },
+              "consent_to_record": { "const": true },
+              "retain_audio": { "type": "boolean" },
+              "client_mode": { "enum": ["mock", "backend", "demo"] },
+              "audio_format": { "$ref": "#/$defs/audioFormat" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "audio.append" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["byte_length", "audio_format"],
+            "properties": {
+              "byte_length": { "type": "integer", "minimum": 1, "maximum": 65536 },
+              "audio_format": { "$ref": "#/$defs/audioFormat" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "audio.commit" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reason"],
+            "properties": { "reason": { "enum": ["manual", "silence"] } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "assistant.cancel" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reason"],
+            "properties": { "reason": { "enum": ["barge_in", "manual"] } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "assistant.playback.ack" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["segment_id", "delivered_through_sequence", "playback_ms"],
+            "properties": {
+              "segment_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "delivered_through_sequence": { "type": "integer", "minimum": 0 },
+              "playback_ms": { "type": "integer", "minimum": 0, "maximum": 3600000 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "session.stop" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["save_transcript"],
+            "properties": { "save_transcript": { "type": "boolean" } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "ping" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["client_timestamp"],
+            "properties": { "client_timestamp": { "type": "string", "format": "date-time" } }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "audioFormat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encoding", "sample_rate_hz", "channels", "content_type"],
+      "properties": {
+        "encoding": { "enum": ["pcm_s16le", "webm_opus", "provider_native"] },
+        "sample_rate_hz": { "type": "integer", "minimum": 8000, "maximum": 192000 },
+        "channels": { "enum": [1, 2] },
+        "content_type": { "type": "string", "minLength": 3, "maxLength": 100 }
+      }
+    }
+  }
+}

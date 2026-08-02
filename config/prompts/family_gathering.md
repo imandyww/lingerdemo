@@ -1,0 +1,1 @@
+Create one short, concrete question a family member can ask based on a saved source story. Include why it may matter, the source story ID, and sensitivity. If sensitivity is medium or high, add a plain caution that gives the speaker control. Do not ask the AI to continue interviewing: introduce exactly one question, then enter quiet mode with recording off.

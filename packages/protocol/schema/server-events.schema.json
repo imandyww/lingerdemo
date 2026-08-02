@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linger.local/protocol/server-events.schema.json",
+  "title": "Linger WebSocket server event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "protocol_version", "session_id", "turn_id", "sequence", "timestamp", "correlation_id", "payload"],
+  "properties": {
+    "type": {
+      "enum": [
+        "session.ready", "session.state", "transcript.partial", "transcript.final",
+        "assistant.text.delta", "assistant.text.final", "assistant.audio.chunk",
+        "assistant.interrupted", "archive.extraction.ready", "archive.updated",
+        "metrics.update", "warning", "error", "pong"
+      ]
+    },
+    "protocol_version": { "const": "1.0" },
+    "session_id": { "type": "string", "format": "uuid" },
+    "turn_id": { "type": "integer", "minimum": 0 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "correlation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "session.ready" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false,
+        "required": ["provider", "raw_audio_retained"],
+        "properties": {
+          "provider": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "audio_format": { "oneOf": [{ "$ref": "#/$defs/audioFormat" }, { "type": "null" }] },
+          "raw_audio_retained": { "type": "boolean" },
+          "auth_mode": { "enum": ["mock", "unconfigured"] }
+        }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "session.state" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["state"],
+        "properties": { "state": { "$ref": "#/$defs/sessionState" }, "detail": { "type": "string", "maxLength": 500 } }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "enum": ["transcript.partial", "transcript.final"] } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["text", "is_final"],
+        "properties": {
+          "text": { "type": "string", "maxLength": 100000 },
+          "is_final": { "type": "boolean" },
+          "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "enum": ["assistant.text.delta", "assistant.text.final"] } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["text", "display_text"],
+        "properties": {
+          "text": { "type": "string", "maxLength": 100000 },
+          "display_text": { "type": "string", "maxLength": 100000 },
+          "segment_id": { "type": "string", "minLength": 1, "maxLength": 128 }
+        }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "assistant.audio.chunk" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false,
+        "required": ["segment_id", "byte_length", "audio_format", "final_for_segment"],
+        "properties": {
+          "segment_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "byte_length": { "type": "integer", "minimum": 1, "maximum": 65536 },
+          "audio_format": { "$ref": "#/$defs/audioFormat" },
+          "final_for_segment": { "type": "boolean" }
+        }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "assistant.interrupted" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["delivered_text", "delivery_uncertain"],
+        "properties": {
+          "delivered_text": { "type": "string", "maxLength": 100000 },
+          "delivery_uncertain": { "type": "boolean" },
+          "cancellation_latency_ms": { "type": "number", "minimum": 0 },
+          "reason": { "enum": ["barge_in", "manual"] }
+        }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "archive.extraction.ready" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["extraction_id"],
+        "properties": { "extraction_id": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "archive.updated" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false,
+        "required": ["story_id", "life_event_ids", "person_ids", "prompt_ids"],
+        "properties": {
+          "story_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "life_event_ids": { "$ref": "#/$defs/idList" },
+          "person_ids": { "$ref": "#/$defs/idList" },
+          "prompt_ids": { "$ref": "#/$defs/idList" }
+        }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "metrics.update" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["metrics"],
+        "properties": { "metrics": { "type": "object", "additionalProperties": { "type": ["number", "null"] } } }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "enum": ["warning", "error"] } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["code", "message", "recoverable"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "message": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "recoverable": { "type": "boolean" }
+        }
+      } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "pong" } } },
+      "then": { "properties": { "payload": {
+        "type": "object", "additionalProperties": false, "required": ["client_timestamp", "server_timestamp"],
+        "properties": {
+          "client_timestamp": { "type": "string", "format": "date-time" },
+          "server_timestamp": { "type": "string", "format": "date-time" }
+        }
+      } } }
+    }
+  ],
+  "$defs": {
+    "audioFormat": {
+      "type": "object", "additionalProperties": false,
+      "required": ["encoding", "sample_rate_hz", "channels", "content_type"],
+      "properties": {
+        "encoding": { "enum": ["pcm_s16le", "webm_opus", "provider_native"] },
+        "sample_rate_hz": { "type": "integer", "minimum": 8000, "maximum": 192000 },
+        "channels": { "enum": [1, 2] },
+        "content_type": { "type": "string", "minLength": 3, "maxLength": 100 }
+      }
+    },
+    "sessionState": { "enum": ["connecting", "ready", "listening", "thinking", "speaking", "saving", "paused", "interrupted", "ended", "error"] },
+    "idList": { "type": "array", "maxItems": 100, "items": { "type": "string", "minLength": 1, "maxLength": 128 } }
+  }
+}
