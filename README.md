@@ -1,18 +1,20 @@
 # Linger
 
-**AI does not create conversations. It catches conversations that almost happened.**
+> **AI does not create conversations. It catches conversations that almost happened.**
 
-Linger is a browser-based realtime oral-history companion for older adults and their families. It notices meaningful memories, asks one concrete follow-up at a time, preserves only what the speaker approves, and turns saved stories into prompts that help relatives begin the next conversation.
+Linger is a realtime oral-history companion for older adults and their families. It listens only after explicit consent, asks one gentle follow-up at a time, and turns approved memories into a private family archive, timeline, family tree, and prompts for the next conversation.
 
-The complete three-minute demo is local and credential-free. It remains usable without a microphone or browser speech synthesis.
+The hackathon demo is deterministic, credential-free, and works without microphone permission. You can run the complete story locally in about three minutes.
 
-## Quick start
+## Run the demo
 
-Prerequisites:
+### Prerequisites
 
 - Node.js 22+ and npm 10+
 - Python 3.12
 - [`uv`](https://docs.astral.sh/uv/) 0.8+
+
+### Start locally
 
 ```bash
 cp .env.example .env
@@ -22,75 +24,112 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:3000/demo](http://localhost:3000/demo). The web app runs on port 3000 and the FastAPI service on port 8080. Mock mode is the default and requires no secrets.
+Open **[http://localhost:3000/demo](http://localhost:3000/demo)**.
 
-`npm run dev` starts both services. `uv` resolves the pinned Python environment on first use; a globally activated virtual environment is not required.
+The web app runs on port `3000` and the FastAPI service on port `8080`. Mock mode is enabled by default, so no API keys, microphone, or browser speech synthesis are required. Starting the demo resets its local fixture, making every presentation repeatable.
 
-## What is included
+## Three-minute walkthrough
 
-- Accessible start and live-conversation experiences with explicit recording consent, transcript captions, pause/mute/interrupt/correction/end controls, visible capture state, and development diagnostics.
-- Deterministic mock voice provider with realistic partial/final transcripts, state transitions, cancellation, optional browser speech synthesis, and no-microphone demo operation.
-- Family Archive with editable/exportable stories, linked timeline, simple accessible family relationship graph, provenance, sensitivity, permissions, and unresolved questions.
-- Family Gathering Mode that introduces one personalized question, then becomes quiet with recording explicitly off.
-- Provider-neutral TypeScript/JSON Schema/Pydantic WebSocket contract with binary audio frames, session/turn/sequence filtering, bounded inputs, and playback acknowledgements.
-- FastAPI `VoiceSessionOrchestrator`, abstract STT/LLM/TTS/extraction providers, complete mock pipeline, live readiness boundaries, streaming text segmentation, cancellation propagation, and safe text-only TTS fallback.
-- Async SQLAlchemy models, Alembic migration, SQLite demo database, PostgreSQL-compatible configuration, transactional archive saves, and idempotent family seed data.
-- Unit, mock integration, protocol-contract, API, and browser tests plus a non-mutating live-provider smoke test.
+1. **Begin intentionally.** Show the explicit recording and saving consent, then choose **Start the conversation**.
+2. **Capture a memory.** Advance the scripted exchange about Grandma leaving home while her younger brother Ming watches from the station.
+3. **Review before saving.** Extract the memory, inspect every person, relationship, place, date, and unresolved question, then explicitly confirm it.
+4. **See the archive connect.** Open the saved story, its provenance-backed 1968 timeline event, and Ming's new family-tree relationship.
+5. **Begin the next conversation.** Linger generates: “Ask Grandma what happened to her younger brother Ming after she left home.”
+6. **Get out of the way.** Start Family Gathering Mode. Linger asks once, becomes quiet, and visibly turns recording off.
 
-## Repository
+For the exact narration and timing, use the [presenter script](docs/presenter-script.md).
+
+## Why Linger
+
+Most family-history tools begin with a blank form or an interview assignment. Linger begins in a moment that is already happening—a rainy day, an old recipe, a familiar song—and helps the family stay with it.
+
+The core loop is:
+
+```text
+Memory → Review and consent → Family archive → A better question → New memory
+```
+
+Linger is designed around a few non-negotiable choices:
+
+- **No passive listening.** Capture begins only after an intentional action, and its state is always visible.
+- **One concrete question at a time.** The assistant follows details the speaker already shared instead of conducting an interrogation.
+- **Nothing saved before review.** Extraction is a temporary draft until the speaker confirms it.
+- **Private by default.** New stories are private; family sharing is a separate decision.
+- **Provenance over invention.** Direct statements, stored family facts, and derived dates remain distinguishable.
+- **Quiet is a feature.** Family Gathering Mode introduces one question and then gives the room back to the family.
+
+## What ships
+
+- A deterministic guided demo with a believable six-person family, five existing stories, a partial tree, timeline events, and unresolved questions
+- A separate realtime conversation experience with partial/final transcript states, pause, interruption, correction, mute, and end-without-saving controls
+- Reviewable memory extraction for stories, people, relationships, places, dates, themes, and questions
+- Transactional archive saving with editable story cards, timeline projection, relationship graph, provenance, sensitivity, and permissions
+- A personalized Family Gathering prompt followed by explicit quiet mode and recording-off state
+- Keyboard-accessible controls, visible focus, reduced-motion support, responsive layouts, and no-microphone fallback
+
+## Architecture
+
+```mermaid
+flowchart LR
+  B["Browser — consent, capture, playback, review"]
+  W["Validated WebSocket protocol"]
+  A["FastAPI voice orchestrator"]
+  S["Streaming STT"]
+  L["Streaming LLM"]
+  T["Streaming TTS"]
+  D[("SQLite / PostgreSQL archive")]
+  I["Inworld speech"]
+  TT["Tenstorrent inference server"]
+
+  B <-->|"JSON control + binary PCM"| W
+  W <--> A
+  A --> S
+  S -->|"final utterances only"| L
+  L --> T
+  A -->|"confirmed memories only"| D
+  S -. "live adapter" .-> I
+  T -. "live adapter" .-> I
+  L -. "private live adapter" .-> TT
+```
+
+The browser owns consent, capture, ordered playback, review, and accessible controls. The API owns credentials, provider connections, turn orchestration, validation, persistence, safety boundaries, and observability.
+
+Each voice exchange carries a session ID, monotonic turn ID, and sequence number. Interruption cancels generation and synthesis, clears queued audio, advances the turn, and rejects late events. Partial transcripts are display-only; only final utterances can trigger a response.
+
+Read the deeper [architecture notes](docs/architecture.md) and [WebSocket protocol](docs/websocket-protocol.md).
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Web | Next.js 16, React 19, TypeScript, Tailwind CSS |
+| Realtime audio | AudioWorklet, WebSocket control messages, binary PCM frames |
+| API | Python 3.12, FastAPI, Pydantic, async orchestration |
+| Data | SQLAlchemy, Alembic, SQLite locally, PostgreSQL-compatible production path |
+| Speech | Deterministic mock provider; optional Inworld STT and TTS adapters |
+| Inference | Deterministic mock provider; optional private Tenstorrent-hosted OpenAI-compatible server |
+| Contracts | Shared JSON Schema, TypeScript types, and Pydantic validation |
+| Quality | Vitest, Playwright, pytest, Ruff, mypy, ESLint |
+
+## Repository layout
 
 ```text
 linger/
 ├── apps/
-│   ├── web/                 Next.js App Router, browser providers, UI, browser tests
-│   └── api/                 FastAPI, orchestration, providers, data, migrations, tests
-├── packages/protocol/       JSON Schema and matching TypeScript protocol types/tests
-├── config/prompts/          Editable voice, extraction, and gathering prompts
-├── docs/                    Architecture, providers, privacy, operations, demo, help
-├── scripts/                 Credential-safe live smoke test
-├── .env.example             Mock defaults and live configuration surface
-├── docker-compose.yml       Web/API services; external hardware is not emulated
-└── package.json             npm workspace and cross-stack commands
+│   ├── web/                 Next.js UI, browser voice providers, unit and E2E tests
+│   └── api/                 FastAPI, orchestration, providers, archive, migrations
+├── packages/protocol/       JSON Schema and matching TypeScript protocol types
+├── config/prompts/          Oral-history, extraction, and gathering prompts
+├── docs/                    Architecture, providers, privacy, operations, demo help
+├── scripts/                 Credential-safe live-provider smoke test
+├── .env.example             Local defaults and live-provider configuration
+├── docker-compose.yml       Web and API containers for the local stack
+└── package.json             Workspace commands
 ```
-
-See [architecture](docs/architecture.md) and the [WebSocket protocol](docs/websocket-protocol.md) for the runtime design.
-
-## Demo flow
-
-The `/demo` route preloads a six-person family, five stories, a partial tree, a timeline, and unresolved questions. Follow the on-screen guide to:
-
-1. Intentionally begin the scripted conversation.
-2. Complete the exact rain/train-station exchange.
-3. Simulate extraction and review every name, relationship, place, date, and question.
-4. Confirm consent and save “The day I left home.”
-5. See the story, the provenance-backed 1968 timeline event, and Ming in the tree.
-6. Generate “Ask Grandma what happened to her younger brother Ming after she left home.”
-7. Start a family conversation; Linger asks it once, enters quiet mode, and visibly turns recording off.
-
-The derived year is supported by Grandma’s stored birth year (1951) plus her direct age statement (seventeen). The UI and saved provenance distinguish those sources from a direct date statement.
-
-The timed narration is in [docs/presenter-script.md](docs/presenter-script.md).
-
-## Database
-
-Local default:
-
-```env
-DATABASE_URL=sqlite+aiosqlite:///./data/linger.db
-```
-
-Migrate and seed independently:
-
-```bash
-npm run db:migrate
-npm run db:seed
-```
-
-Both migration and seed are idempotent. For PostgreSQL, provide an async SQLAlchemy URL such as `postgresql+asyncpg://...`, run migrations, and use production-grade credentials/networking. Do not reuse the demo database or mock authentication for real family data.
 
 ## Configuration
 
-Copy `.env.example`. These defaults are intentionally local:
+The default `.env.example` is deliberately safe and local:
 
 ```env
 VOICE_PROVIDER=mock
@@ -98,24 +137,29 @@ LLM_PROVIDER=mock
 DEMO_MODE=true
 MOCK_AUTH=true
 RAW_AUDIO_RETENTION=false
+NEXT_PUBLIC_VOICE_PROVIDER=mock
 ```
 
-Missing live secrets do not affect mock startup. Live mode fails readiness with an actionable, sanitized error; it never silently sends content to a different model.
+Missing live credentials never break the mock demo, and live mode never silently falls back to a different provider.
 
-### Inworld live speech
+### Inworld speech
 
-Read [docs/provider-notes.md](docs/provider-notes.md) before configuration. Provide the documented server-side credentials, verified STT configuration, TTS model, voice, language, and audio format. Then set:
+To exercise the server-side Inworld STT/TTS adapters, read [provider notes](docs/provider-notes.md), verify the models and voice available to the account, then configure:
 
 ```env
 VOICE_PROVIDER=inworld
 NEXT_PUBLIC_VOICE_PROVIDER=backend
+INWORLD_API_KEY=your-server-side-credential
+INWORLD_STT_MODEL=your-verified-stt-model
+INWORLD_TTS_MODEL=inworld-tts-2
+INWORLD_VOICE_ID=your-verified-voice
 ```
 
-The values in `.env.example`, including `inworld-tts-2`, are examples requiring verification against current documentation and the selected account capabilities. Credentials never belong in `NEXT_PUBLIC_*` variables.
+Never place provider credentials in a `NEXT_PUBLIC_*` variable.
 
-### Tenstorrent live inference
+### Tenstorrent inference
 
-The inference server is an external, hardware-backed dependency; Docker Compose does not emulate it. Read [docs/tenstorrent-setup.md](docs/tenstorrent-setup.md), then provide a private authenticated OpenAI-compatible base URL, a verified loaded instruction model, health mechanism, and context limit:
+The Tenstorrent service is an external, hardware-backed dependency; Docker Compose does not emulate it. Follow the [Tenstorrent setup guide](docs/tenstorrent-setup.md), verify the served model and context limit on the target system, then configure:
 
 ```env
 LLM_PROVIDER=tenstorrent
@@ -126,50 +170,70 @@ TENSTORRENT_MODEL=operator-verified-model-id
 TENSTORRENT_HEALTH_URL=https://private-model-host.example/health
 ```
 
-The example `Llama-3.1-8B-Instruct` value is not a universal hardware compatibility claim. Verify it for the actual device topology and serving release. Never expose the inference port to the public internet.
+Keep the inference server on a private authenticated network.
 
-## Tests and checks
+## Database
 
-All default automated tests run without live credentials:
+The local default is SQLite:
 
-```bash
-npm test
-npm run test:web
-npm run test:api
-npm run test:e2e
-npm run lint
-npm run typecheck
-npm run build
-npm run check
+```env
+DATABASE_URL=sqlite+aiosqlite:///./data/linger.db
 ```
 
-Install Playwright’s browser once if it is not already present:
+Migrations and seed data are idempotent:
+
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
+For PostgreSQL, provide an async SQLAlchemy URL such as `postgresql+asyncpg://...` and run the same migration command. Do not reuse the demo database or mock authentication for real family data.
+
+## Verification
+
+All default checks run without provider credentials:
+
+```bash
+npm run check       # lint + typecheck + protocol, web, and API tests
+npm run build       # production builds for protocol and web
+npm run test:e2e    # deterministic desktop and mobile browser flows
+npm run smoke:live  # non-mutating readiness check for configured live providers
+```
+
+Install Playwright's browser once if needed:
 
 ```bash
 npx playwright install chromium
 ```
 
-The live smoke test is explicit and non-mutating:
+The live smoke test reports each configured subsystem as passed, failed, skipped, or unavailable without printing secrets or changing archive data.
 
-```bash
-npm run smoke:live
-```
-
-It reports each configured subsystem as pass, fail, skipped, or unavailable without printing secrets or modifying archive data.
-
-## Docker Compose
+## Docker
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Compose runs only the web and API services and persists the local SQLite database in a named volume. Inworld remains a remote service and Tenstorrent remains an external hardware-backed server. For production, build immutable images, use PostgreSQL, managed secrets, authenticated sessions, private networks, exact origins, and HTTPS/WSS.
+Compose runs the web and API services and persists the local SQLite database in a named volume. Inworld remains remote and Tenstorrent remains an external inference server.
 
-## Privacy and production cautions
+## Privacy and production readiness
 
-Raw-audio retention is disabled. Linger never records passively and offers an end-without-saving path. Enabling audio storage requires a separate, documented consent and encrypted retention process; see [docs/privacy-security.md](docs/privacy-security.md).
+Raw-audio retention is disabled, voice-session transcript state is not persisted by the WebSocket service, and ending a conversation without saving discards the draft. An approved story is saved only after explicit confirmation and defaults to private.
 
-Mock auth, local SQLite, development CORS defaults, and unencrypted `ws://` are demo settings. Before real use, complete the production checklist, verify deletion/export/sharing behavior for the deployment jurisdiction, and keep provider endpoints and secrets server-side.
+Mock authentication, local SQLite, development CORS, and unencrypted `ws://` are demo settings. Before using real family data, complete the [privacy and security checklist](docs/privacy-security.md), switch to authenticated sessions and PostgreSQL, use managed secrets and HTTPS/WSS, verify deletion/export/sharing behavior for the deployment jurisdiction, and review the [operations guide](docs/operations.md).
 
-Current live-provider verification status and exact unresolved runtime details are recorded in [docs/provider-notes.md](docs/provider-notes.md). Operational handoff steps are in [docs/operations.md](docs/operations.md), and common failures are covered by [docs/troubleshooting.md](docs/troubleshooting.md).
+## Documentation
+
+- [Presenter script](docs/presenter-script.md) — exact three-minute demo narration
+- [Architecture](docs/architecture.md) — runtime boundaries and invariants
+- [WebSocket protocol](docs/websocket-protocol.md) — events, binary audio, ordering, and cancellation
+- [Provider notes](docs/provider-notes.md) — verified live APIs and configuration status
+- [Tenstorrent setup](docs/tenstorrent-setup.md) — private inference-server requirements
+- [Privacy and security](docs/privacy-security.md) — consent, retention, and production checklist
+- [Troubleshooting](docs/troubleshooting.md) — common local and live-provider failures
+- [Operations](docs/operations.md) — deployment and handoff notes
+
+---
+
+**Memory becomes archive. Archive begins a family conversation. That conversation can become a new memory.**
