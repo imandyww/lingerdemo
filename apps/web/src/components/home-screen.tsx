@@ -1,50 +1,33 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useVoiceSession } from "@/hooks/use-voice-session";
 
 export function HomeScreen() {
-  const voice = useVoiceSession();
+  const router = useRouter();
   const [consent, setConsent] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [dialOn, setDialOn] = useState(false);
   const [dialBusy, setDialBusy] = useState(false);
 
-  async function toggleVoiceSession() {
+  function startVoiceSession() {
     if (dialBusy) return;
-    if (!dialOn && !consent) {
+    if (!consent) {
       setAnnouncement("Choose the listening consent checkbox before switching Linger on.");
       document.querySelector<HTMLInputElement>("#recording-consent")?.focus();
       return;
     }
 
     setDialBusy(true);
-    setAnnouncement("");
-    try {
-      if (dialOn) {
-        await voice.stop(false);
-        setDialOn(false);
-        setAnnouncement("Voice session off. Nothing was saved.");
-      } else {
-        window.sessionStorage.setItem("linger:recording-consent", "true");
-        window.sessionStorage.setItem("linger:language", "en-US");
-        await voice.start("en-US");
-        setDialOn(true);
-        setAnnouncement("Voice session on. Linger is listening.");
-      }
-    } catch (error) {
-      setDialOn(false);
-      setAnnouncement(error instanceof Error ? error.message : "The voice session could not be changed.");
-    } finally {
-      setDialBusy(false);
-    }
+    setDialOn(true);
+    setAnnouncement("Opening the voice conversation.");
+    window.sessionStorage.setItem("linger:recording-consent", "true");
+    window.sessionStorage.setItem("linger:language", "en-US");
+    window.sessionStorage.setItem("linger:start-requested", "true");
+    router.push("/conversation");
   }
 
-  const sessionStatus = dialBusy
-    ? dialOn ? "Switching off…" : "Warming up…"
-    : dialOn
-      ? voice.recording ? "Listening now" : voice.useBackend ? voice.stateDetail : "Local voice session on"
-      : "Voice session off";
+  const sessionStatus = dialBusy ? "Opening conversation…" : "Voice session off";
 
   return (
     <main id="main-content" className={`one-screen-home ${dialOn ? "session-on" : "session-off"}`}>
@@ -70,7 +53,7 @@ export function HomeScreen() {
                   aria-label={dialOn ? "Switch voice session off" : "Switch voice session on"}
                   aria-describedby="radio-session-status start-help"
                   disabled={dialBusy}
-                  onClick={() => void toggleVoiceSession()}
+                  onClick={startVoiceSession}
                 >
                   <span className="radio-dial-notch" aria-hidden="true" />
                   <span className="sr-only">{dialOn ? "On" : "Off"}</span>
@@ -86,7 +69,6 @@ export function HomeScreen() {
             <strong>{sessionStatus}</strong>
           </div>
           <p id="start-help" className="start-help">Turn on to talk · turn off to stop</p>
-          {voice.error ? <p className="radio-error" role="alert">{voice.error.message}</p> : null}
         </div>
         <label className="radio-consent" htmlFor="recording-consent">
             <input id="recording-consent" type="checkbox" checked={consent} disabled={dialOn || dialBusy} onChange={(event) => setConsent(event.target.checked)} />

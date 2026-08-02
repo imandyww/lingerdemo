@@ -38,16 +38,12 @@ test("moves focus to each wizard phase and honors reduced motion", async ({ page
   expect(Number.parseFloat(duration)).toBeLessThan(0.1);
 });
 
-test("shows a useful no-microphone path when permission is denied", async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, "permissions", {
-      configurable: true,
-      value: { query: async () => ({ state: "denied", addEventListener() {}, removeEventListener() {} }) },
-    });
-  });
+test("hands the root dial to the full voice conversation", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Microphone blocked — demo still works")).toBeVisible();
-  await page.getByRole("button", { name: /Start talking/ }).click();
+  await page.getByRole("switch", { name: "Switch voice session on" }).click();
   await expect(page.locator("#recording-consent")).toBeFocused();
-  await expect(page.getByRole("link", { name: /guided demonstration/i })).toBeVisible();
+  await page.locator('label[for="recording-consent"]').click();
+  await page.getByRole("switch", { name: "Switch voice session on" }).click();
+  await expect(page).toHaveURL(/\/conversation$/);
+  await expect(page.getByRole("heading", { name: "Take all the time you need." })).toBeVisible();
 });
