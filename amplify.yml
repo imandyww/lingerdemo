@@ -10,8 +10,9 @@ applications:
             - npm ci
         build:
           commands:
+            - export NEXT_PUBLIC_VOICE_PROVIDER="${NEXT_PUBLIC_VOICE_PROVIDER:-mock}"
             - node scripts/validate-amplify-live-env.mjs
-            - env | grep -e '^NEXT_PUBLIC_' >> apps/web/.env.production
+            - env | grep -e '^NEXT_PUBLIC_' > apps/web/.env.production
             - npm run build
       artifacts:
         baseDirectory: apps/web/.next

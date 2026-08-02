@@ -11,8 +11,10 @@ workspace at `apps/web`.
 4. Add the environment variables below in **Hosting → Environment variables**.
 5. Save the variables and redeploy the branch.
 
-This Amplify build is configured for the live FastAPI backend and intentionally
-fails if these values are absent or use insecure URL schemes:
+The frontend deploys in deterministic mock mode by default, so a fresh Amplify
+app does not require a separately hosted API. To connect the live FastAPI
+backend, set all three values below. The build intentionally fails if backend
+mode is selected while either URL is absent or uses an insecure URL scheme:
 
 ```env
 NEXT_PUBLIC_VOICE_PROVIDER=backend
@@ -23,6 +25,12 @@ NEXT_PUBLIC_WS_URL=wss://api.example.com/ws/voice
 `NEXT_PUBLIC_API_URL` must use HTTPS and `NEXT_PUBLIC_WS_URL` must use WSS when
 the Amplify site is served over HTTPS. The API must also include the Amplify
 site origin in `ALLOWED_ORIGINS`.
+
+To explicitly keep a branch in demo mode, set only:
+
+```env
+NEXT_PUBLIC_VOICE_PROVIDER=mock
+```
 
 The guided `/demo` route remains a deterministic local presentation. Use
 `/conversation` for live microphone → Inworld STT → Tenstorrent LLM → Inworld

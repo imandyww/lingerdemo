@@ -1,7 +1,8 @@
 const errors = [];
+const voiceProvider = process.env.NEXT_PUBLIC_VOICE_PROVIDER;
 
-if (process.env.NEXT_PUBLIC_VOICE_PROVIDER !== "backend") {
-  errors.push("NEXT_PUBLIC_VOICE_PROVIDER must be set to backend");
+if (voiceProvider !== "mock" && voiceProvider !== "backend") {
+  errors.push("NEXT_PUBLIC_VOICE_PROVIDER must be set to mock or backend");
 }
 
 function requireUrl(name, protocol) {
@@ -21,8 +22,10 @@ function requireUrl(name, protocol) {
   }
 }
 
-requireUrl("NEXT_PUBLIC_API_URL", "https:");
-requireUrl("NEXT_PUBLIC_WS_URL", "wss:");
+if (voiceProvider === "backend") {
+  requireUrl("NEXT_PUBLIC_API_URL", "https:");
+  requireUrl("NEXT_PUBLIC_WS_URL", "wss:");
+}
 
 if (errors.length > 0) {
   console.error("Amplify live configuration is incomplete:");
@@ -30,4 +33,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log("Amplify live backend configuration is valid.");
+console.log(`Amplify ${voiceProvider} configuration is valid.`);
