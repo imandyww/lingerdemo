@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useVoiceSession } from "@/hooks/use-voice-session";
 import { confirmMemory, extractMemory } from "@/lib/archive/archive-client";
 import { normalizeReviewedMemory, setPrimaryEventDate } from "@/lib/archive/review-memory";
@@ -15,6 +15,10 @@ export function ConversationScreen() {
   const voice = useVoiceSession();
   const [hasConsent, setHasConsent] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
+  const [dialOn, setDialOn] = useState(false);
+  const [dialBusy, setDialBusy] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
   const [correctionTurn, setCorrectionTurn] = useState<number | null>(null);
@@ -28,29 +32,45 @@ export function ConversationScreen() {
   const [reviewNotice, setReviewNotice] = useState("");
   const [reviewSharing, setReviewSharing] = useState<"private" | "family">("private");
   const [draftKept, setDraftKept] = useState(false);
-  const started = useRef(false);
   const reviewRequestGeneration = useRef(0);
 
-  const begin = useCallback(async () => {
-    if (started.current) return;
-    started.current = true;
-    setHasConsent(true);
+  async function begin() {
+    if (dialBusy) return;
+    if (!consentChecked) {
+      setAnnouncement("Choose the listening consent checkbox before switching Linger on.");
+      document.querySelector<HTMLInputElement>("#recording-consent")?.focus();
+      return;
+    }
+    setDialBusy(true);
     window.sessionStorage.setItem("linger:recording-consent", "true");
-    await voice.start(window.sessionStorage.getItem("linger:language") ?? "en-US");
-  }, [voice]);
+    window.sessionStorage.setItem("linger:language", "en-US");
+    try {
+      await voice.start("en-US");
+      setHasConsent(true);
+      setDialOn(true);
+      setAnnouncement("Linger is listening. Select the speaker grille to show live captions.");
+    } catch (error) {
+      setAnnouncement(error instanceof Error ? error.message : "The voice session could not start.");
+    } finally {
+      setDialBusy(false);
+    }
+  }
 
-  useEffect(() => {
-    const approved = window.sessionStorage.getItem("linger:recording-consent") === "true";
-    const requested = window.sessionStorage.getItem("linger:start-requested") === "true";
-    const timer = window.setTimeout(() => {
-      setConsentChecked(approved);
-      if (approved && requested) {
-        window.sessionStorage.removeItem("linger:start-requested");
-        void begin();
-      }
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [begin]);
+  async function switchOff() {
+    if (dialBusy) return;
+    setDialBusy(true);
+    try {
+      await voice.stop(false);
+      setDialOn(false);
+      setAnnouncement("Voice session off. The unsaved transcript remains visible until you leave this page.");
+    } finally {
+      setDialBusy(false);
+    }
+  }
+
+  function toggleDial() {
+    void (dialOn ? switchOff() : begin());
+  }
 
   async function speakNext() {
     setScriptBusy(true);
@@ -75,6 +95,7 @@ export function ConversationScreen() {
       .filter(Boolean)
       .join("\n\n");
     await voice.stop(false);
+    setDialOn(false);
     setEndOpen(false);
     setReviewOpen(true);
     setReviewState("extracting");
@@ -151,31 +172,53 @@ export function ConversationScreen() {
     URL.revokeObjectURL(url);
   }
 
-  if (!hasConsent) {
-    return (
-      <main id="main-content" className="preflight-page">
-        <section className="preflight-card">
-          <span className="preflight-icon"><MicIcon width="34" height="34" /></span>
-          <p className="eyebrow"><span /> A private conversation</p>
-          <h1>Ready when you are.</h1>
-          <p>Nothing is recording. Linger will wait through pauses and ask only one question at a time.</p>
-          <label className="consent-check" htmlFor="conversation-consent">
-            <input id="conversation-consent" type="checkbox" checked={consentChecked} onChange={(event) => setConsentChecked(event.target.checked)} />
-            <span aria-hidden="true" />
-            <strong>I consent to recording this conversation.</strong>
-          </label>
-          <p className="privacy-note">Your voice and story will only be saved when you choose to save them.</p>
-          <button className="button button-primary button-large" type="button" disabled={!consentChecked} onClick={() => void begin()}><MicIcon width="24" height="24" /> Begin recording</button>
-          <Link className="text-link" href="/">Go back without recording</Link>
-        </section>
-      </main>
-    );
-  }
-
-  const sessionActive = !["ended", "disconnected", "error"].includes(voice.state);
+  const sessionActive = dialOn && !["ended", "disconnected", "error"].includes(voice.state);
   const displayedState = voice.capturePaused ? "paused" : voice.state;
+  const sessionStatus = dialBusy ? (dialOn ? "Switching off…" : "Opening conversation…") : dialOn ? voice.stateDetail : "Voice session off";
   return (
-    <main id="main-content" className="conversation-page">
+    <main id="main-content" className={`conversation-page radio-conversation-page ${dialOn ? "session-on" : "session-off"}`}>
+      <div className="one-screen-glow" aria-hidden="true" />
+      <section className="radio-stage" aria-label="Linger voice session">
+        <h1 className="sr-only">Linger voice session</h1>
+        <div className={`radio-cabinet ${dialOn ? "is-on" : "is-off"}`} aria-label="Voice session radio">
+          <div className="radio-face">
+            <div className="radio-display">
+              <div>
+                <span className="radio-brand">Linger</span>
+                <span className="radio-instruction">Share a memory.<br />We’ll help you keep it.</span>
+              </div>
+              <div className="radio-signal" aria-hidden="true">
+                {[8, 15, 24, 34, 42, 34, 24, 15, 8].map((height, index) => <i key={index} style={{ height }} />)}
+              </div>
+              <div className="radio-dial-wrap">
+                <button className="radio-dial" type="button" role="switch" aria-checked={dialOn} aria-label={dialOn ? "Switch voice session off" : "Switch voice session on"} aria-describedby="radio-session-status start-help" disabled={dialBusy} onClick={toggleDial}>
+                  <span className="radio-dial-notch" aria-hidden="true" />
+                  <span className="sr-only">{dialOn ? "On" : "Off"}</span>
+                </button>
+                <span className="radio-off" aria-hidden="true">Off</span>
+                <span className="radio-on" aria-hidden="true">On</span>
+              </div>
+            </div>
+            <button className="radio-speaker radio-transcript-toggle" type="button" aria-expanded={transcriptOpen} aria-controls="radio-transcript" onClick={() => setTranscriptOpen((open) => !open)}>
+              <span className="sr-only">{transcriptOpen ? "Hide live transcript" : "Show live transcript"}</span>
+              <span className="radio-speaker-hint" aria-hidden="true">{transcriptOpen ? "Hide captions" : "Press for captions"}</span>
+              <span className="radio-leaf" aria-hidden="true">◇</span>
+            </button>
+          </div>
+          <div className="radio-state" id="radio-session-status" role="status"><span aria-hidden="true" /><strong>{sessionStatus}</strong></div>
+          <p id="start-help" className="start-help">Turn on to talk · press the speaker for captions</p>
+        </div>
+        <label className="radio-consent" htmlFor="recording-consent">
+          <input id="recording-consent" type="checkbox" checked={consentChecked} disabled={dialOn || dialBusy} onChange={(event) => setConsentChecked(event.target.checked)} />
+          <span aria-hidden="true" />
+          <strong>I’m ready for Linger to listen while the radio is on.</strong>
+        </label>
+        <p className="one-screen-privacy">Nothing is saved when you switch off.</p>
+      </section>
+
+      {transcriptOpen ? <TranscriptPanel turns={voice.turns} partial={voice.partial} /> : null}
+
+      {hasConsent ? <div className="root-conversation-workspace">
       <header className="conversation-header">
         <div>
           <p className="section-kicker">Conversation with Mei</p>
@@ -232,36 +275,6 @@ export function ConversationScreen() {
           </div>
         </section>
 
-        <aside className="transcript-panel" aria-labelledby="transcript-heading">
-          <div className="panel-heading"><div><p className="section-kicker">Captions</p><h2 id="transcript-heading">Conversation transcript</h2></div><span>{voice.turns.length} turns</span></div>
-          {voice.turns.length === 0 && !voice.partial ? (
-            <div className="empty-state compact"><MicIcon width="28" height="28" /><h3>Your words will appear here.</h3><p>Live captions are available without making reading the center of the conversation.</p></div>
-          ) : (
-            <ol className="transcript-list">
-              {voice.turns.map((turn) => (
-                <li key={`${turn.sessionId}-${turn.turnId}`}>
-                  {turn.user ? <div className="transcript-entry user-entry"><span>You</span><p>{turn.user}</p>{turn.corrected ? <small>Corrected</small> : null}</div> : null}
-                  {turn.assistant ? <div className="transcript-entry assistant-entry"><span>Linger</span><p>{turn.assistant}</p></div> : null}
-                </li>
-              ))}
-              {voice.partial ? <li><div className="transcript-entry user-entry partial-entry"><span>You, live</span><p>{voice.partial}<i aria-hidden="true" /></p></div></li> : null}
-            </ol>
-          )}
-          {process.env.NODE_ENV !== "production" ? (
-            <details className="diagnostics-panel">
-              <summary>Development diagnostics</summary>
-              <dl>
-                <div><dt>Final transcript</dt><dd>{voice.diagnostics.finalTranscriptMs ?? "—"} ms</dd></div>
-                <div><dt>First token</dt><dd>{voice.diagnostics.firstTokenMs ?? "—"} ms</dd></div>
-                <div><dt>First audio</dt><dd>{voice.diagnostics.firstAudioMs ?? "text only"}</dd></div>
-                <div><dt>Speech to speech</dt><dd>{voice.diagnostics.speechToSpeechMs ?? "—"} ms</dd></div>
-                <div><dt>Cancel</dt><dd>{voice.diagnostics.cancellationMs ?? "—"} ms</dd></div>
-                <div><dt>Dropped stale events</dt><dd>{voice.diagnostics.droppedEvents}</dd></div>
-              </dl>
-              <p>Correlation <code>{voice.diagnostics.correlationId.slice(0, 12)}</code></p>
-            </details>
-          ) : null}
-        </aside>
       </div>
 
       <Dialog open={correctionOpen} title="Correct what Linger heard" description="This local correction replaces the text used when you review and extract a memory. It does not rewrite an answer already sent to the live assistant." onClose={() => setCorrectionOpen(false)}>
@@ -270,7 +283,7 @@ export function ConversationScreen() {
       </Dialog>
 
       <Dialog open={endOpen} title="End this conversation?" description="The microphone will stop immediately. Nothing becomes a family story unless you review and save it." onClose={() => setEndOpen(false)}>
-        <div className="end-options"><button className="button button-danger" type="button" onClick={() => { void voice.stop(false); setEndOpen(false); }}>End without saving</button><button className="button button-primary" type="button" onClick={() => void endAndReview()}>End and review transcript</button></div>
+        <div className="end-options"><button className="button button-danger" type="button" onClick={() => { void switchOff(); setEndOpen(false); }}>End without saving</button><button className="button button-primary" type="button" onClick={() => void endAndReview()}>End and review transcript</button></div>
       </Dialog>
 
       <Dialog open={reviewOpen} title={reviewState === "saved" ? "Memory saved" : "Review this memory"} description={reviewState === "saved" ? "The reviewed story is now available in the family archive." : "The extraction result exists only in this open page and is not a family story. Check every detail, then save, explicitly keep it on this page, or discard it."} onClose={() => void discardReview()}>
@@ -292,6 +305,17 @@ export function ConversationScreen() {
         ) : null}
         {reviewState === "saved" ? <div className="inline-saved-state"><span><CheckIcon width="33" height="33" /></span><p>{reviewNotice}</p><Link className="button button-primary" href="/archive" onClick={() => setReviewOpen(false)}>View family archive <ArrowIcon width="20" height="20" /></Link></div> : null}
       </Dialog>
+      </div> : null}
+      <p className="sr-announcement" aria-live="assertive">{announcement}</p>
     </main>
+  );
+}
+
+function TranscriptPanel({ turns, partial }: { turns: ReturnType<typeof useVoiceSession>["turns"]; partial: string }) {
+  return (
+    <aside id="radio-transcript" className="transcript-panel radio-transcript-panel" aria-labelledby="transcript-heading">
+      <div className="panel-heading"><div><p className="section-kicker">Captions</p><h2 id="transcript-heading">Conversation transcript</h2></div><span>{turns.length} turns</span></div>
+      {turns.length === 0 && !partial ? <div className="empty-state compact"><MicIcon width="28" height="28" /><h3>Your words will appear here.</h3><p>Turn on the radio when you are ready. Live captions are not saved unless you review the memory.</p></div> : <ol className="transcript-list">{turns.map((turn) => <li key={`${turn.sessionId}-${turn.turnId}`}>{turn.user ? <div className="transcript-entry user-entry"><span>You</span><p>{turn.user}</p>{turn.corrected ? <small>Corrected</small> : null}</div> : null}{turn.assistant ? <div className="transcript-entry assistant-entry"><span>Linger</span><p>{turn.assistant}</p></div> : null}</li>)}{partial ? <li><div className="transcript-entry user-entry partial-entry"><span>You, live</span><p>{partial}<i aria-hidden="true" /></p></div></li> : null}</ol>}
+    </aside>
   );
 }

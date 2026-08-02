@@ -923,6 +923,95 @@ h3 {
   letter-spacing: .03em;
 }
 
+/* Root conversation — the radio remains the instrument, not a handoff screen. */
+.conversation-page.radio-conversation-page {
+  position: relative;
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+  padding: clamp(1.2rem, 4vh, 3rem) 0 5rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 18rem, rgb(255 255 255 / 96%) 0 10rem, transparent 34rem),
+    linear-gradient(180deg, #fbfbfa 0%, #eeefed 52rem, #f5f2eb 100%);
+}
+
+.radio-conversation-page > .radio-stage {
+  margin: 0 auto;
+}
+
+.radio-transcript-toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.radio-transcript-toggle::after {
+  position: absolute;
+  inset: 10px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  content: "";
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.radio-transcript-toggle:hover::after,
+.radio-transcript-toggle[aria-expanded="true"]::after {
+  border-color: rgb(154 121 80 / 34%);
+  background: rgb(255 255 255 / 8%);
+}
+
+.radio-transcript-toggle:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.radio-speaker-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  padding: .38rem .62rem;
+  border: 1px solid rgb(107 92 70 / 18%);
+  border-radius: 999px;
+  background: rgb(240 238 232 / 78%);
+  color: #635c51;
+  font-family: var(--font-utility);
+  font-size: .58rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%);
+}
+
+.transcript-panel.radio-transcript-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 2rem, 760px);
+  min-height: 230px;
+  max-height: 560px;
+  margin: 3.3rem auto 0;
+  background: rgb(251 250 246 / 92%);
+}
+
+.root-conversation-workspace {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 3rem, 1120px);
+  margin: 4.5rem auto 0;
+}
+
+.root-conversation-workspace .conversation-layout {
+  grid-template-columns: 1fr;
+}
+
+.root-conversation-workspace .listening-stage {
+  min-height: 620px;
+}
+
 .listening-button {
   position: relative;
   width: clamp(245px, 27vw, 330px);
@@ -3092,6 +3181,8 @@ h3 {
   .consent-box { padding: 1.4rem 0; border-top: 1px solid var(--line); border-right: 0; border-bottom: 1px solid var(--line); border-left: 0; }
   .readiness-list { grid-column: auto; grid-template-columns: 1fr; border-top: 0; }
   .conversation-page { padding-top: 2.5rem; }
+  .radio-conversation-page { padding-top: 1.2rem; }
+  .root-conversation-workspace { width: min(100% - 2rem, 1120px); margin-top: 3rem; }
   .conversation-header { align-items: start; flex-direction: column; }
   .mock-auth-banner { align-items: flex-start; flex-direction: column; }
   .mock-auth-banner small { margin-left: 0; }
@@ -3193,6 +3284,8 @@ h3 {
   .radio-dial { width: 82px; height: 82px; }
   .radio-dial-notch { top: 13px; left: 36px; }
   .radio-speaker { height: 116px; }
+  .radio-speaker-hint { font-size: .52rem; }
+  .radio-transcript-panel { width: calc(100% - 1.5rem); margin-top: 2.8rem; }
   .radio-leaf { right: 20px; bottom: 18px; width: 37px; height: 37px; }
   .radio-state { margin-top: 16px; }
   .radio-cabinet .start-help { margin-bottom: 15px; font-size: .72rem; }

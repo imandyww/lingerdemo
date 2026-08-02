@@ -38,12 +38,19 @@ test("moves focus to each wizard phase and honors reduced motion", async ({ page
   expect(Number.parseFloat(duration)).toBeLessThan(0.1);
 });
 
-test("hands the root dial to the full voice conversation", async ({ page }) => {
+test("runs the full voice conversation on the root radio", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("switch", { name: "Switch voice session on" }).click();
   await expect(page.locator("#recording-consent")).toBeFocused();
   await page.locator('label[for="recording-consent"]').click();
   await page.getByRole("switch", { name: "Switch voice session on" }).click();
-  await expect(page).toHaveURL(/\/conversation$/);
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "Take all the time you need." })).toBeVisible();
+  await page.getByRole("button", { name: "Show live transcript" }).click();
+  await expect(page.getByRole("heading", { name: "Conversation transcript" })).toBeVisible();
+});
+
+test("redirects the legacy conversation route to root", async ({ page }) => {
+  await page.goto("/conversation");
+  await expect(page).toHaveURL(/\/$/);
 });
