@@ -6,7 +6,9 @@ workspace at `apps/web`.
 ## Amplify setup
 
 1. Connect the repository and the branch you want to deploy.
-2. When Amplify detects a monorepo, select `apps/web` as the app root.
+2. When Amplify detects a monorepo, select `apps/web` as the app root. Confirm
+   that the branch has `AMPLIFY_MONOREPO_APP_ROOT=apps/web`; compute hosting
+   uses this value to find the web workspace's `next` dependency.
 3. Keep the build specification from the repository.
 4. Add the environment variables below in **Hosting → Environment variables**.
 5. Save the variables and redeploy the branch.
