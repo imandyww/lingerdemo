@@ -26,7 +26,17 @@ npm run dev
 
 Open **[http://localhost:3000/demo](http://localhost:3000/demo)**.
 
-The web app runs on port `3000` and the FastAPI service on port `8080`. Mock mode is enabled by default, so no API keys, microphone, or browser speech synthesis are required. Starting the demo resets its local fixture, making every presentation repeatable.
+The web app runs on port `3000` and the FastAPI service on port `8080`. The `/demo` route always uses its browser-local fixture, so no API keys, microphone, backend connection, or browser speech synthesis are required. Starting it resets the fixture, making every presentation repeatable.
+
+Useful local endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| [http://localhost:3000/demo](http://localhost:3000/demo) | Deterministic guided demo |
+| [http://localhost:8080/docs](http://localhost:8080/docs) | Interactive API reference |
+| [http://localhost:8080/health](http://localhost:8080/health) | Service and auth-mode health |
+| [http://localhost:8080/ready](http://localhost:8080/ready) | Provider readiness |
+| `ws://localhost:8080/ws/voice/{session_id}` | Realtime voice transport |
 
 ## Three-minute walkthrough
 
@@ -74,6 +84,8 @@ flowchart LR
   B["Browser — consent, capture, playback, review"]
   W["Validated WebSocket protocol"]
   A["FastAPI voice orchestrator"]
+  H["HTTP archive API"]
+  R["Temporary review draft"]
   S["Streaming STT"]
   L["Streaming LLM"]
   T["Streaming TTS"]
@@ -81,18 +93,20 @@ flowchart LR
   I["Inworld speech"]
   TT["Tenstorrent inference server"]
 
-  B <-->|"JSON control + binary PCM"| W
+  B <-->|"JSON control + binary audio frames"| W
   W <--> A
-  A --> S
-  S -->|"final utterances only"| L
-  L --> T
-  A -->|"confirmed memories only"| D
+  A <-->|"audio / transcript events"| S
+  A <-->|"prompt / token stream"| L
+  A <-->|"text / speech chunks"| T
+  B --> R
+  R -->|"explicit confirmation"| H
+  H --> D
   S -. "live adapter" .-> I
   T -. "live adapter" .-> I
   L -. "private live adapter" .-> TT
 ```
 
-The browser owns consent, capture, ordered playback, review, and accessible controls. The API owns credentials, provider connections, turn orchestration, validation, persistence, safety boundaries, and observability.
+The browser owns consent, capture, ordered playback, review, and accessible controls. The API owns credentials, provider connections, turn orchestration, validation, persistence, safety boundaries, and observability. The voice WebSocket never persists its session transcript; only an explicitly confirmed review is sent to the HTTP archive API.
 
 Each voice exchange carries a session ID, monotonic turn ID, and sequence number. Interruption cancels generation and synthesis, clears queued audio, advances the turn, and rejects late events. Partial transcripts are display-only; only final utterances can trigger a response.
 
@@ -103,7 +117,7 @@ Read the deeper [architecture notes](docs/architecture.md) and [WebSocket protoc
 | Layer | Technology |
 | --- | --- |
 | Web | Next.js 16, React 19, TypeScript, Tailwind CSS |
-| Realtime audio | AudioWorklet, WebSocket control messages, binary PCM frames |
+| Realtime audio | AudioWorklet, WebSocket control messages, binary audio frames |
 | API | Python 3.12, FastAPI, Pydantic, async orchestration |
 | Data | SQLAlchemy, Alembic, SQLite locally, PostgreSQL-compatible production path |
 | Speech | Deterministic mock provider; optional Inworld STT and TTS adapters |
@@ -141,6 +155,18 @@ NEXT_PUBLIC_VOICE_PROVIDER=mock
 ```
 
 Missing live credentials never break the mock demo, and live mode never silently falls back to a different provider.
+
+### Backend transport with mock providers
+
+By default, both `/demo` and `/conversation` use browser-local simulation. To exercise the real FastAPI WebSocket, ordering, and orchestration without external credentials, keep the server providers mocked and change only the browser transport:
+
+```env
+VOICE_PROVIDER=mock
+LLM_PROVIDER=mock
+NEXT_PUBLIC_VOICE_PROVIDER=backend
+```
+
+Restart `npm run dev`, then open [http://localhost:3000/conversation](http://localhost:3000/conversation). The guided `/demo` remains browser-local by design.
 
 ### Inworld speech
 
@@ -233,6 +259,7 @@ Mock authentication, local SQLite, development CORS, and unencrypted `ws://` are
 - [Privacy and security](docs/privacy-security.md) — consent, retention, and production checklist
 - [Troubleshooting](docs/troubleshooting.md) — common local and live-provider failures
 - [Operations](docs/operations.md) — deployment and handoff notes
+- [AWS Amplify Hosting](docs/amplify-deployment.md) — monorepo build and environment variables
 
 ---
 
