@@ -1,34 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowIcon, MicIcon, ShieldIcon, WifiIcon } from "./icons";
-import { checkBackend } from "@/lib/archive/archive-client";
-import { MicrophoneCapture, type MicrophonePermission } from "@/lib/voice";
+import { useState } from "react";
 import { useVoiceSession } from "@/hooks/use-voice-session";
-
-const permissionLabels: Record<MicrophonePermission, string> = {
-  prompt: "Asked when you begin",
-  granted: "Microphone available",
-  denied: "Microphone blocked — demo still works",
-  unsupported: "No microphone — demo still works",
-};
 
 export function HomeScreen() {
   const voice = useVoiceSession();
   const [consent, setConsent] = useState(false);
-  const [permission, setPermission] = useState<MicrophonePermission>("prompt");
-  const [backend, setBackend] = useState<"checking" | "online" | "offline">("checking");
   const [announcement, setAnnouncement] = useState("");
   const [dialOn, setDialOn] = useState(false);
   const [dialBusy, setDialBusy] = useState(false);
-  const liveVoiceSelected = process.env.NEXT_PUBLIC_VOICE_PROVIDER === "backend";
-
-  useEffect(() => {
-    const microphone = new MicrophoneCapture();
-    void microphone.permission().then(setPermission);
-    void checkBackend().then(setBackend);
-  }, []);
 
   async function toggleVoiceSession() {
     if (dialBusy) return;
@@ -67,21 +47,11 @@ export function HomeScreen() {
       : "Voice session off";
 
   return (
-    <main id="main-content" className="home-page">
-      <div className="home-ambient" aria-hidden="true"><span /><span /><span /></div>
-      <section className="home-hero" aria-labelledby="home-heading">
-        <div className="hero-copy">
-          <p className="eyebrow"><span /> A listening room for family stories</p>
-          <h1 id="home-heading">Some stories only arrive <em>once.</em></h1>
-          <p className="hero-lede">Share a memory. We will help you keep it.</p>
-          <p className="hero-support">Linger listens for the people, places, and small details worth passing on—then asks one thoughtful question at a time.</p>
-          <div className="home-trust-line">
-            <ShieldIcon width="22" height="22" />
-            <p>Your voice and story will only be saved when you choose to save them.</p>
-          </div>
-        </div>
-
-        <div className={`start-panel radio-cabinet ${dialOn ? "is-on" : "is-off"}`} aria-label="Voice session radio">
+    <main id="main-content" className={`one-screen-home ${dialOn ? "session-on" : "session-off"}`}>
+      <div className="one-screen-glow" aria-hidden="true" />
+      <section className="radio-stage" aria-label="Linger voice session">
+        <h1 className="sr-only">Linger voice session</h1>
+        <div className={`radio-cabinet ${dialOn ? "is-on" : "is-off"}`} aria-label="Voice session radio">
           <div className="radio-face">
             <div className="radio-display">
               <div>
@@ -115,36 +85,15 @@ export function HomeScreen() {
             <span aria-hidden="true" />
             <strong>{sessionStatus}</strong>
           </div>
-          <p id="start-help" className="start-help">Turn the dial on to begin. Turn it off to stop without saving.</p>
+          <p id="start-help" className="start-help">Turn on to talk · turn off to stop</p>
           {voice.error ? <p className="radio-error" role="alert">{voice.error.message}</p> : null}
         </div>
-      </section>
-
-      <section className="home-settings" aria-labelledby="ready-heading">
-        <div className="settings-intro">
-          <p className="section-kicker">Before we begin</p>
-          <h2 id="ready-heading">You are always in control.</h2>
-        </div>
-        <div className="consent-box">
-          <label className="consent-check" htmlFor="recording-consent">
+        <label className="radio-consent" htmlFor="recording-consent">
             <input id="recording-consent" type="checkbox" checked={consent} disabled={dialOn || dialBusy} onChange={(event) => setConsent(event.target.checked)} />
             <span aria-hidden="true" />
-            <strong>I am ready for Linger to listen while the radio is on.</strong>
-          </label>
-          <p>Audio is not kept by default. You can pause or end at any moment, and you will review every memory before it is saved.</p>
-          <div className="language-row">
-            <label htmlFor="language">Conversation language</label>
-            <select id="language" value="en-US" disabled aria-describedby="language-support">
-              <option value="en-US">English (US) · verified</option>
-            </select>
-            <small id="language-support">Additional languages require a configured voice provider.</small>
-          </div>
-        </div>
-        <div className="readiness-list" aria-label="System readiness">
-          <div><MicIcon width="24" height="24" /><span><strong>Microphone</strong><small>{permissionLabels[permission]}</small></span></div>
-          <div><WifiIcon width="24" height="24" /><span><strong>Conversation service</strong><small>{liveVoiceSelected ? backend === "checking" ? "Checking backend and authentication mode…" : backend === "online" ? "Development backend reachable · identity mode shown when you start" : "Backend offline · guided demo available" : "Local mock voice · mock identity · no application sign-in"}</small></span></div>
-          <Link href="/demo"><span><strong>No microphone?</strong><small>Try the guided demonstration</small></span><ArrowIcon width="21" height="21" /></Link>
-        </div>
+            <strong>I’m ready for Linger to listen while the radio is on.</strong>
+        </label>
+        <p className="one-screen-privacy">Nothing is saved when you switch off.</p>
       </section>
       <p className="sr-announcement" aria-live="assertive">{announcement}</p>
     </main>

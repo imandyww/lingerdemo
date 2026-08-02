@@ -25,9 +25,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [textScale]);
 
   return (
-    <div className="app-frame">
+    <div className={`app-frame ${pathname === "/" ? "home-frame" : ""}`}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <header className="site-header">
+      {pathname !== "/" ? <header className="site-header">
         <Link className="wordmark" href="/" aria-label="Linger home">
           <span className="wordmark-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Linger</span>
@@ -43,12 +43,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button type="button" onClick={() => setTextScale((scale) => Math.max(1, Number((scale - 0.06).toFixed(2))))} aria-label="Decrease text size">−</button>
           <button type="button" onClick={() => setTextScale((scale) => Math.min(1.18, Number((scale + 0.06).toFixed(2))))} aria-label="Increase text size">+</button>
         </div>
-      </header>
+      </header> : null}
       {children}
-      <footer className="site-footer">
+      {pathname !== "/" ? <footer className="site-footer">
         <p>Stories stay private until your family chooses to share them.</p>
         <p className="footer-philosophy">AI does not create conversations. It catches conversations that almost happened.</p>
-      </footer>
+      </footer> : null}
     </div>
   );
 }

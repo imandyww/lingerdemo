@@ -482,6 +482,48 @@ h3 {
 }
 
 /* Home — the concentric listening object is the product's visual signature. */
+.home-frame {
+  overflow: hidden;
+  background: #f4f3f0;
+}
+
+.one-screen-home {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  overflow: hidden;
+  padding: clamp(1.2rem, 4vh, 3rem) 1rem;
+  background:
+    radial-gradient(circle at 50% 42%, rgb(255 255 255 / 96%) 0 16%, transparent 50%),
+    linear-gradient(180deg, #fbfbfa 0%, #eeefed 100%);
+}
+
+.one-screen-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(78vw, 900px);
+  aspect-ratio: 1.65;
+  border-radius: 50%;
+  background: rgb(181 139 76 / 9%);
+  filter: blur(70px);
+  opacity: .25;
+  transform: translate(-50%, -45%);
+  transition: opacity 600ms ease;
+}
+
+.session-on .one-screen-glow { opacity: .72; }
+
+.radio-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 540px);
+}
+
 .home-page {
   position: relative;
   width: min(100% - 3rem, 1360px);
@@ -578,6 +620,9 @@ h3 {
 /* The homepage switch borrows the physical certainty of a bedside radio. */
 .radio-cabinet {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: min(100%, 510px);
   padding: 18px 18px 0;
   border: 1px solid rgb(126 98 57 / 24%);
@@ -818,6 +863,64 @@ h3 {
   color: var(--danger);
   font-size: .72rem;
   text-align: center;
+}
+
+.radio-consent {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  margin-top: 34px;
+  color: #545651;
+  cursor: pointer;
+  font-size: .76rem;
+  line-height: 1.4;
+}
+
+.radio-consent input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.radio-consent > span {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid #8f928c;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 72%);
+}
+
+.radio-consent input:checked + span {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.radio-consent input:checked + span::after {
+  width: 7px;
+  height: 4px;
+  border-bottom: 1.5px solid white;
+  border-left: 1.5px solid white;
+  content: "";
+  transform: rotate(-45deg) translateY(-1px);
+}
+
+.radio-consent input:focus-visible + span {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.radio-consent input:disabled ~ strong,
+.radio-consent input:disabled + span { opacity: .65; }
+
+.one-screen-privacy {
+  margin: .5rem 0 0;
+  color: #797b76;
+  font-family: var(--font-utility);
+  font-size: .58rem;
+  letter-spacing: .03em;
 }
 
 .listening-button {
@@ -2952,6 +3055,7 @@ h3 {
 
 @media (max-width: 780px) {
   body { padding-bottom: 70px; }
+  body:has(.home-frame) { padding-bottom: 0; }
   .site-header { display: flex; width: min(100% - 2rem, 1440px); min-height: 70px; }
   .wordmark { font-size: 1.35rem; }
   .wordmark-mark { width: 29px; height: 29px; }
@@ -3071,6 +3175,28 @@ h3 {
 }
 
 @media (max-width: 440px) {
+  .one-screen-home { padding: 1rem .75rem; }
+  .radio-stage { width: min(100%, 360px); }
+  .radio-cabinet { padding: 12px 12px 0; border-radius: 34px; }
+  .radio-face { border-radius: 25px; }
+  .radio-display {
+    grid-template-columns: minmax(0, 1fr) 112px;
+    gap: 5px;
+    min-height: 158px;
+    padding: 18px 16px 14px 21px;
+  }
+  .radio-brand { margin-bottom: 10px; font-size: 2rem; }
+  .radio-instruction { font-size: .68rem; }
+  .radio-signal { display: none; }
+  .radio-dial-wrap { width: 108px; height: 126px; }
+  .radio-dial-wrap::before { width: 91px; height: 91px; box-shadow: 0 0 0 6px #f6deb2, 0 0 18px rgb(207 146 52 / 18%); }
+  .radio-dial { width: 82px; height: 82px; }
+  .radio-dial-notch { top: 13px; left: 36px; }
+  .radio-speaker { height: 116px; }
+  .radio-leaf { right: 20px; bottom: 18px; width: 37px; height: 37px; }
+  .radio-state { margin-top: 16px; }
+  .radio-cabinet .start-help { margin-bottom: 15px; font-size: .72rem; }
+  .radio-consent { margin-top: 27px; padding: 0 .7rem; font-size: .7rem; }
   .text-size-control button { width: 34px; height: 34px; }
   .hero-copy h1 { font-size: 3.25rem; }
   .home-settings { padding: 1rem; }
