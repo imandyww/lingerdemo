@@ -7,6 +7,7 @@ from pathlib import Path
 # Local developer credentials must not turn deterministic tests into live provider calls.
 os.environ["VOICE_PROVIDER"] = "mock"
 os.environ["LLM_PROVIDER"] = "mock"
+os.environ["TENSTORRENT_API_KEY"] = ""
 
 import pytest_asyncio
 from linger_api.config import Settings
