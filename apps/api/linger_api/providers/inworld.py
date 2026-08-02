@@ -396,6 +396,11 @@ class InworldTTSProvider(StreamingTTSProvider):
                                 raise ProviderError(
                                     "inworld_malformed_audio", "Inworld returned invalid Base64 audio."
                                 ) from exc
+                            # Inworld may emit empty audioContent events between real PCM chunks.
+                            # They are transport keepalives, not playable audio, and forwarding them
+                            # would violate Linger's non-empty audio-frame protocol.
+                            if not decoded:
+                                continue
                             if pending is not None:
                                 yield AudioChunk(pending, self.audio_format, sequence, False)
                                 sequence += 1

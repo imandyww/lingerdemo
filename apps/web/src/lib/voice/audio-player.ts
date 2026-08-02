@@ -3,10 +3,13 @@ import type { AudioEvent } from "./types";
 type AudioContextConstructor = typeof AudioContext;
 
 export class StreamingAudioPlayer {
+  private static readonly SCHEDULE_LEAD_SECONDS = 0.04;
+
   private context: AudioContext | null = null;
-  private source: AudioBufferSourceNode | null = null;
+  private sources = new Set<AudioBufferSourceNode>();
   private queue: AudioEvent[] = [];
-  private playing = false;
+  private draining = false;
+  private scheduledThrough = 0;
   private generation = 0;
   private activeSessionId: string | null = null;
   private activeTurnId = 0;
@@ -35,7 +38,8 @@ export class StreamingAudioPlayer {
     if (
       event.sessionId !== this.activeSessionId ||
       event.turnId !== this.activeTurnId ||
-      event.sequence <= this.lastSequence
+      event.sequence <= this.lastSequence ||
+      event.audio.byteLength === 0
     ) {
       return false;
     }
@@ -49,16 +53,18 @@ export class StreamingAudioPlayer {
   cancel(): void {
     this.generation += 1;
     this.queue = [];
-    this.playing = false;
-    if (this.source) {
+    this.draining = false;
+    this.scheduledThrough = 0;
+    for (const source of this.sources) {
+      source.onended = null;
       try {
-        this.source.stop();
+        source.stop();
       } catch {
         // The source may already have ended.
       }
-      this.source.disconnect();
-      this.source = null;
+      source.disconnect();
     }
+    this.sources.clear();
   }
 
   async close(): Promise<void> {
@@ -87,6 +93,7 @@ export class StreamingAudioPlayer {
     }
     const samples = new Int16Array(event.audio);
     const frameCount = Math.floor(samples.length / event.format.channels);
+    if (frameCount === 0) throw new Error("The voice service sent an empty audio chunk.");
     const buffer = context.createBuffer(event.format.channels, frameCount, event.format.sampleRateHz);
     for (let channel = 0; channel < event.format.channels; channel += 1) {
       const channelData = buffer.getChannelData(channel);
@@ -98,37 +105,42 @@ export class StreamingAudioPlayer {
   }
 
   private async drain(generation: number): Promise<void> {
-    if (this.playing) return;
-    this.playing = true;
+    if (this.draining) return;
+    this.draining = true;
     try {
       while (this.queue.length > 0 && generation === this.generation) {
         const event = this.queue.shift();
         if (!event) break;
-        const context = this.getContext();
-        if (context.state === "suspended") await context.resume();
-        const buffer = await this.decode(event);
-        if (generation !== this.generation) return;
-        await new Promise<void>((resolve, reject) => {
+        try {
+          const context = this.getContext();
+          if (context.state === "suspended") await context.resume();
+          const buffer = await this.decode(event);
+          if (generation !== this.generation) return;
           const source = context.createBufferSource();
-          this.source = source;
           source.buffer = buffer;
           source.connect(context.destination);
+          const startsAt = Math.max(
+            context.currentTime + StreamingAudioPlayer.SCHEDULE_LEAD_SECONDS,
+            this.scheduledThrough,
+          );
+          this.scheduledThrough = startsAt + buffer.duration;
+          this.sources.add(source);
           source.onended = () => {
-            this.source = null;
-            resolve();
+            this.sources.delete(source);
+            source.disconnect();
+            if (generation === this.generation) this.deliveredCallback?.(event);
           };
-          try {
-            source.start();
-          } catch (error) {
-            reject(error instanceof Error ? error : new Error("Audio playback failed"));
-          }
-        });
-        if (generation === this.generation) this.deliveredCallback?.(event);
+          source.start(startsAt);
+        } catch (error) {
+          // A malformed chunk should not strand valid audio that is already queued behind it.
+          this.failureCallback?.(error instanceof Error ? error.message : "Audio playback failed");
+        }
       }
-    } catch (error) {
-      this.failureCallback?.(error instanceof Error ? error.message : "Audio playback failed");
     } finally {
-      if (generation === this.generation) this.playing = false;
+      if (generation === this.generation) {
+        this.draining = false;
+        if (this.queue.length > 0) void this.drain(generation);
+      }
     }
   }
 }

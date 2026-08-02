@@ -44,6 +44,7 @@ async def check_inworld_tts() -> Check:
     provider = InworldTTSProvider(settings)
     cancellation = asyncio.Event()
     total_bytes = 0
+    chunk_count = 0
     try:
         async for chunk in provider.synthesize(
             "This is a short Linger voice check.",
@@ -51,8 +52,11 @@ async def check_inworld_tts() -> Check:
             turn_id=0,
             cancellation=cancellation,
         ):
+            if not chunk.data:
+                return Check("inworld_tts", "fail", "Streaming returned an empty PCM audio chunk.")
+            chunk_count += 1
             total_bytes += len(chunk.data)
-        if total_bytes == 0:
+        if chunk_count == 0 or total_bytes == 0:
             return Check("inworld_tts", "fail", "Streaming completed without audio bytes.")
         return Check("inworld_tts", "pass", f"Synthesized {total_bytes} bytes of raw PCM audio.")
     except Exception as exc:

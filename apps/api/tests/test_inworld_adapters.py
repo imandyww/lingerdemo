@@ -93,11 +93,25 @@ async def test_inworld_tts_filters_stale_context_and_emits_configured_pcm() -> N
         context_id = socket.sent[0]["contextId"]
         stale = base64.b64encode(b"stale").decode("ascii")
         current = base64.b64encode(b"current").decode("ascii")
+        continuation = base64.b64encode(b"continuation").decode("ascii")
         await socket.incoming.put(
             json.dumps({"result": {"contextId": "older-context", "audioChunk": {"audioContent": stale}}})
         )
         await socket.incoming.put(
             json.dumps({"result": {"contextId": context_id, "audioChunk": {"audioContent": current}}})
+        )
+        await socket.incoming.put(
+            json.dumps({"result": {"contextId": context_id, "audioChunk": {"audioContent": ""}}})
+        )
+        await socket.incoming.put(
+            json.dumps(
+                {
+                    "result": {
+                        "contextId": context_id,
+                        "audioChunk": {"audioContent": continuation},
+                    }
+                }
+            )
         )
         await socket.incoming.put(json.dumps({"result": {"contextId": context_id, "flushCompleted": {}}}))
 
@@ -109,8 +123,8 @@ async def test_inworld_tts_filters_stale_context_and_emits_configured_pcm() -> N
         )
     ]
     await producer
-    assert [chunk.data for chunk in chunks] == [b"current"]
-    assert chunks[0].final_for_segment
+    assert [chunk.data for chunk in chunks] == [b"current", b"continuation"]
+    assert [chunk.final_for_segment for chunk in chunks] == [False, True]
     assert chunks[0].audio_format.sample_rate_hz == 16_000
     create = socket.sent[0]["create"]
     assert create["deliveryMode"] == "STABLE"
