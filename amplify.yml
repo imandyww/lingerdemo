@@ -1,0 +1,24 @@
+version: 1
+
+applications:
+  - appRoot: apps/web
+    frontend:
+      buildPath: /
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - export NEXT_PUBLIC_VOICE_PROVIDER="${NEXT_PUBLIC_VOICE_PROVIDER:-mock}"
+            - env | grep -e '^NEXT_PUBLIC_' >> apps/web/.env.production
+            - npm run build
+      artifacts:
+        baseDirectory: apps/web/.next
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*
+          - apps/web/.next/cache/**/*
+
