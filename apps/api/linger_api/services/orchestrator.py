@@ -194,6 +194,7 @@ class VoiceSessionOrchestrator:
         }
         self._commit_started_at: float | None = None
         self._metric_turn_id: int | None = None
+        self._barge_in_candidate_turn: int | None = None
         self._acquired = False
         self.input_audio_format: Any | None = None
 
@@ -419,13 +420,25 @@ class VoiceSessionOrchestrator:
                 turn_id = transcript.turn_id
                 if transcript.signal == "speech_started":
                     if self.pipeline_task and not self.pipeline_task.done() and self._is_current(turn_id):
-                        await self._interrupt("barge_in", preserve_stt=True)
-                        self._begin_turn_metrics(self.current_turn)
+                        # A raw VAD edge can be speaker echo or a brief noise. Keep the
+                        # response running until STT confirms actual words.
+                        self._barge_in_candidate_turn = turn_id
                     elif self._is_current(turn_id):
                         self._begin_turn_metrics(turn_id)
                     continue
                 if transcript.signal != "transcript" or not self._is_current(turn_id):
                     continue
+                if (
+                    self._barge_in_candidate_turn == turn_id
+                    and self.pipeline_task
+                    and not self.pipeline_task.done()
+                ):
+                    if not transcript.text.strip():
+                        continue
+                    self._barge_in_candidate_turn = None
+                    await self._interrupt("barge_in", preserve_stt=True)
+                    # The confirming partial belongs to the newly advanced input turn.
+                    turn_id = self.current_turn
                 self._begin_turn_metrics(turn_id)
                 elapsed = self._elapsed_commit_ms()
                 if transcript.is_final:
@@ -686,6 +699,7 @@ class VoiceSessionOrchestrator:
     async def _interrupt(self, reason: Literal["barge_in", "manual"], *, preserve_stt: bool = False) -> None:
         turn_id = self.current_turn
         started = monotonic()
+        self._barge_in_candidate_turn = None
         self.cancel_event.set()
         self.segmenter.cancel()
         self.display_filter.reset()

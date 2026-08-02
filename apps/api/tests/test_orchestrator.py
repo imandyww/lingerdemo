@@ -8,7 +8,7 @@ import pytest
 from linger_api.config import Settings
 from linger_api.models import ConversationSession
 from linger_api.protocol import AudioAppendMessage, PlaybackAckMessage, ProtocolViolation, TurnGuard
-from linger_api.providers.base import ProviderError
+from linger_api.providers.base import ProviderError, TranscriptChunk
 from linger_api.providers.mock import MockLLMProvider, MockSTTProvider, MockTTSProvider
 from linger_api.seed import DEMO_USER_ID, seed_demo_data
 from linger_api.services.orchestrator import (
@@ -75,6 +75,21 @@ class FlakySTTProvider(MockSTTProvider):
         await super().commit(turn_id=turn_id)
 
 
+class ControlledSTTProvider(MockSTTProvider):
+    def __init__(self) -> None:
+        super().__init__(delay_seconds=0)
+        self.connected = True
+        self.reassignments: list[tuple[int, int]] = []
+        self.reassigned = asyncio.Event()
+
+    async def emit(self, event: TranscriptChunk) -> None:
+        await self._events.put(event)
+
+    async def reassign_turn(self, old_turn_id: int, new_turn_id: int) -> None:
+        self.reassignments.append((old_turn_id, new_turn_id))
+        self.reassigned.set()
+
+
 async def test_cancellation_propagates_and_advances_turn(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -91,6 +106,52 @@ async def test_cancellation_propagates_and_advances_turn(
     event, binary = await orchestrator.outbound.get()
     assert event["type"] == "assistant.interrupted"
     assert binary is None
+
+
+async def test_barge_in_requires_recognized_speech_before_cancelling(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    stt = ControlledSTTProvider()
+    orchestrator = VoiceSessionOrchestrator(
+        settings=Settings(app_environment="test"),
+        stt=stt,
+        llm=MockLLMProvider(delay_seconds=0),
+        tts=MockTTSProvider(delay_seconds=0),
+        session_factory=session_factory,
+        registry=SessionRegistry(2),
+    )
+    session_id = uuid.uuid4()
+    orchestrator.session_id = session_id
+    orchestrator.turn_guard = TurnGuard(session_id)
+    response_task = asyncio.create_task(asyncio.sleep(60))
+    orchestrator.pipeline_task = response_task
+    listener = asyncio.create_task(orchestrator._listen_stt())
+
+    await stt.emit(TranscriptChunk(turn_id=0, signal="speech_started"))
+    await asyncio.sleep(0)
+    assert orchestrator.current_turn == 0
+    assert not response_task.done()
+
+    await stt.emit(TranscriptChunk(text="Actually", is_final=False, turn_id=0))
+    async with asyncio.timeout(1):
+        await stt.reassigned.wait()
+
+    assert orchestrator.current_turn == 1
+    assert response_task.cancelled()
+    assert stt.reassignments == [(0, 1)]
+    emitted = []
+    while not orchestrator.outbound.empty():
+        event, _ = orchestrator.outbound.get_nowait()
+        emitted.append(event)
+    interruption = next(event for event in emitted if event["type"] == "assistant.interrupted")
+    remapped_partial = next(event for event in emitted if event["type"] == "transcript.partial")
+    assert interruption["payload"]["reason"] == "barge_in"
+    assert remapped_partial["turn_id"] == 1
+    assert remapped_partial["payload"]["text"] == "Actually"
+
+    listener.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await listener
 
 
 def test_playback_ack_is_bounded_by_known_segment_and_sequence(
