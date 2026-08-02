@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowIcon, MicIcon, ShieldIcon, WifiIcon } from "./icons";
 import { checkBackend } from "@/lib/archive/archive-client";
 import { MicrophoneCapture, type MicrophonePermission } from "@/lib/voice";
+import { useVoiceSession } from "@/hooks/use-voice-session";
 
 const permissionLabels: Record<MicrophonePermission, string> = {
   prompt: "Asked when you begin",
@@ -15,11 +15,13 @@ const permissionLabels: Record<MicrophonePermission, string> = {
 };
 
 export function HomeScreen() {
-  const router = useRouter();
+  const voice = useVoiceSession();
   const [consent, setConsent] = useState(false);
   const [permission, setPermission] = useState<MicrophonePermission>("prompt");
   const [backend, setBackend] = useState<"checking" | "online" | "offline">("checking");
   const [announcement, setAnnouncement] = useState("");
+  const [dialOn, setDialOn] = useState(false);
+  const [dialBusy, setDialBusy] = useState(false);
   const liveVoiceSelected = process.env.NEXT_PUBLIC_VOICE_PROVIDER === "backend";
 
   useEffect(() => {
@@ -28,17 +30,41 @@ export function HomeScreen() {
     void checkBackend().then(setBackend);
   }, []);
 
-  function startConversation() {
-    if (!consent) {
-      setAnnouncement("Choose the recording consent checkbox before starting.");
+  async function toggleVoiceSession() {
+    if (dialBusy) return;
+    if (!dialOn && !consent) {
+      setAnnouncement("Choose the listening consent checkbox before switching Linger on.");
       document.querySelector<HTMLInputElement>("#recording-consent")?.focus();
       return;
     }
-    window.sessionStorage.setItem("linger:recording-consent", "true");
-    window.sessionStorage.setItem("linger:language", "en-US");
-    window.sessionStorage.setItem("linger:start-requested", "true");
-    router.push("/conversation");
+
+    setDialBusy(true);
+    setAnnouncement("");
+    try {
+      if (dialOn) {
+        await voice.stop(false);
+        setDialOn(false);
+        setAnnouncement("Voice session off. Nothing was saved.");
+      } else {
+        window.sessionStorage.setItem("linger:recording-consent", "true");
+        window.sessionStorage.setItem("linger:language", "en-US");
+        await voice.start("en-US");
+        setDialOn(true);
+        setAnnouncement("Voice session on. Linger is listening.");
+      }
+    } catch (error) {
+      setDialOn(false);
+      setAnnouncement(error instanceof Error ? error.message : "The voice session could not be changed.");
+    } finally {
+      setDialBusy(false);
+    }
   }
+
+  const sessionStatus = dialBusy
+    ? dialOn ? "Switching off…" : "Warming up…"
+    : dialOn
+      ? voice.recording ? "Listening now" : voice.useBackend ? voice.stateDetail : "Local voice session on"
+      : "Voice session off";
 
   return (
     <main id="main-content" className="home-page">
@@ -55,13 +81,42 @@ export function HomeScreen() {
           </div>
         </div>
 
-        <div className="start-panel" aria-label="Start a conversation">
-          <button className="listening-button" type="button" onClick={startConversation} aria-describedby="start-help">
-            <span className="listening-ring ring-one" aria-hidden="true" />
-            <span className="listening-ring ring-two" aria-hidden="true" />
-            <span className="listening-center"><MicIcon width="34" height="34" /><strong>Start talking</strong><small>Nothing begins until you press</small></span>
-          </button>
-          <p id="start-help" className="start-help">Take your time. Pauses are welcome.</p>
+        <div className={`start-panel radio-cabinet ${dialOn ? "is-on" : "is-off"}`} aria-label="Voice session radio">
+          <div className="radio-face">
+            <div className="radio-display">
+              <div>
+                <span className="radio-brand">Linger</span>
+                <span className="radio-instruction">Share a memory.<br />We’ll help you keep it.</span>
+              </div>
+              <div className="radio-signal" aria-hidden="true">
+                {[8, 15, 24, 34, 42, 34, 24, 15, 8].map((height, index) => <i key={index} style={{ height }} />)}
+              </div>
+              <div className="radio-dial-wrap">
+                <button
+                  className="radio-dial"
+                  type="button"
+                  role="switch"
+                  aria-checked={dialOn}
+                  aria-label={dialOn ? "Switch voice session off" : "Switch voice session on"}
+                  aria-describedby="radio-session-status start-help"
+                  disabled={dialBusy}
+                  onClick={() => void toggleVoiceSession()}
+                >
+                  <span className="radio-dial-notch" aria-hidden="true" />
+                  <span className="sr-only">{dialOn ? "On" : "Off"}</span>
+                </button>
+                <span className="radio-off" aria-hidden="true">Off</span>
+                <span className="radio-on" aria-hidden="true">On</span>
+              </div>
+            </div>
+            <div className="radio-speaker" aria-hidden="true"><span className="radio-leaf">◇</span></div>
+          </div>
+          <div className="radio-state" id="radio-session-status" role="status">
+            <span aria-hidden="true" />
+            <strong>{sessionStatus}</strong>
+          </div>
+          <p id="start-help" className="start-help">Turn the dial on to begin. Turn it off to stop without saving.</p>
+          {voice.error ? <p className="radio-error" role="alert">{voice.error.message}</p> : null}
         </div>
       </section>
 
@@ -72,9 +127,9 @@ export function HomeScreen() {
         </div>
         <div className="consent-box">
           <label className="consent-check" htmlFor="recording-consent">
-            <input id="recording-consent" type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
+            <input id="recording-consent" type="checkbox" checked={consent} disabled={dialOn || dialBusy} onChange={(event) => setConsent(event.target.checked)} />
             <span aria-hidden="true" />
-            <strong>I am ready for Linger to listen during this conversation.</strong>
+            <strong>I am ready for Linger to listen while the radio is on.</strong>
           </label>
           <p>Audio is not kept by default. You can pause or end at any moment, and you will review every memory before it is saved.</p>
           <div className="language-row">
