@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from pathlib import Path
+
+# Local developer credentials must not turn deterministic tests into live provider calls.
+os.environ["VOICE_PROVIDER"] = "mock"
+os.environ["LLM_PROVIDER"] = "mock"
 
 import pytest_asyncio
 from linger_api.config import Settings

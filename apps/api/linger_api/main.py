@@ -92,11 +92,11 @@ async def ready(response: Response) -> dict[str, object]:
     stt, llm, tts = _providers()
     healths: list[ProviderHealth] = []
     try:
-        healths = [await stt.health(), await llm.health(), await tts.health()]  # type: ignore[attr-defined]
+        healths = [await stt.health(), await llm.health(), await tts.health()]
     finally:
-        await stt.close()  # type: ignore[attr-defined]
-        await llm.close()  # type: ignore[attr-defined]
-        await tts.close()  # type: ignore[attr-defined]
+        await stt.close()
+        await llm.close()
+        await tts.close()
     issues = settings.readiness_issues()
     issues.extend(item.detail for item in healths if not item.ready and item.detail not in issues)
     if issues:
@@ -120,9 +120,9 @@ async def _voice_socket(websocket: WebSocket, expected_session_id: str | None) -
     stt, llm, tts = _providers()
     orchestrator = VoiceSessionOrchestrator(
         settings=settings,
-        stt=stt,  # type: ignore[arg-type]
-        llm=llm,  # type: ignore[arg-type]
-        tts=tts,  # type: ignore[arg-type]
+        stt=stt,
+        llm=llm,
+        tts=tts,
         session_factory=SessionLocal,
         registry=app.state.session_registry,
         expected_session_id=expected_session_id,
