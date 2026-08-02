@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { HomeScreen } from "@/components/home-screen";
+import { ConversationScreen } from "@/components/conversation-screen";
 
-export const metadata: Metadata = { title: "Keep the stories that matter" };
+export const metadata: Metadata = { title: "Live conversation" };
 
 export default function HomePage() {
-  return <HomeScreen />;
+  return <ConversationScreen />;
 }
